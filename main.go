@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"encoding/json"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type Profile struct {
@@ -17,6 +18,7 @@ type Player struct {
 
 type Match struct {
 	MatchID int `json:"match_id"`
+	PlayerSlot int `json:"player_slot"`
 	RadiantWin bool `json:"radiant_win"`
 	HeroID int `json:"hero_id"`
 	Duration int `json:"duration"`
@@ -30,6 +32,20 @@ type Match struct {
 	//party type
 	
 }
+
+var (
+	winStyle = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(lipgloss.Color("76"))
+
+	lossStyle = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(lipgloss.Color("1"))
+
+	nameStyle = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(lipgloss.Color("7"))
+)
 func main() {
 	var id string
 	fmt.Scan(&id)
@@ -48,13 +64,20 @@ func main() {
 	var player Player
 	var matches []Match
 	json.Unmarshal(body, &player)
-	fmt.Println(player.Profile.Personaname)
+	line := fmt.Sprintf(player.Profile.Personaname)
+	fmt.Println(nameStyle.Render(line))
 	json.Unmarshal(body2, &matches)
 	if len(matches) == 0 {
 		fmt.Println("This profile is private or no recent matches")
 	}
 	for _, match := range matches {
-		fmt.Printf("%v | %d/%d/%d | %d:%02d\n", match.RadiantWin, match.Kills, match.Deaths, match.Assists, match.Duration/60, match.Duration%60)
+		win := (match.RadiantWin && match.PlayerSlot < 128) || (!match.RadiantWin && match.PlayerSlot >= 128)
+		result := lossStyle.Render("LOSS")
+		if win {
+			result = winStyle.Render("WIN")
+		}
+		line2 := fmt.Sprintf("%v | %d/%d/%d | %d:%02d\n", result, match.Kills, match.Deaths, match.Assists, match.Duration/60, match.Duration%60)
+		fmt.Println(line2)
 	}
 	return
 }

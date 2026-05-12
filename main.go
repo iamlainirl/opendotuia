@@ -40,10 +40,9 @@ type Match struct {
 	Kills int `json:"kills"`
 	Deaths int `json:"deaths"`
 	Assists int `json:"assists"`
-	//average_rank
-	//leaver status
-	//party type
-	
+	AverageRank int `json:"average_rank"`
+	LeaverStatus int `json:"leaver_status"`
+	PartySize *int `json:"party_size"`
 }
 
 // screen 
@@ -70,6 +69,10 @@ var (
 	kdaStyle = lipgloss.NewStyle().
 	Width(10).
 	Align(lipgloss.Center)
+
+	abandonedStyle = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(lipgloss.Color("166"))
 )
 
 type model struct {
@@ -142,6 +145,37 @@ func fetchMatches(id string) tea.Cmd {
 	}
 }
 
+func Rank(r int) string {
+	star := r % 10
+	switch {
+	case r < 20: return fmt.Sprintf("Herald %d", star)
+	case r < 30: return fmt.Sprintf("Guardian %d", star)
+	case r < 40: return fmt.Sprintf("Crusader %d", star)
+	case r < 50: return fmt.Sprintf("Archon %d", star)
+	case r < 60: return fmt.Sprintf("Legend %d", star)
+	case r < 70: return fmt.Sprintf("Ancient %d", star)
+	case r < 80: return fmt.Sprintf("Divine %d", star)
+	case r >= 80: return "Immortal"
+	default: return "Unknown"
+	}
+}
+
+func partyString(p *int) string {
+	if p == nil {
+		return "Solo"
+	}
+	if *p == 1 {
+		return "Solo"
+	}
+	return fmt.Sprintf("Party %d", *p)
+}
+
+func leaverStr(l int) string {
+	if l == 0 {
+		return ""
+	}
+	return "Abandoned"
+}
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd){
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -191,9 +225,14 @@ func (m model) View() tea.View {
 			if win {
 				result = winStyle.Render("WIN")
 			}
-			line := fmt.Sprintf("%s | %s | %s | %d:%02d",
+			if match.LeaverStatus > 0 {
+				result = abandonedStyle.Render("Abandoned")
+			}
+			line := fmt.Sprintf("%s | %s | %s | %s | %s | %d:%02d",
 				result,
 				heroStyle.Render(heroName),
+				partyString(match.PartySize),
+				Rank(match.AverageRank),
 				kdaStyle.Render(kda),
 				match.Duration/60, match.Duration%60,
 			)

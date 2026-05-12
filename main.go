@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
+	"os"
 	"encoding/json"
 	"github.com/charmbracelet/lipgloss"
 	_ "embed"
@@ -79,19 +79,31 @@ type model struct {
 	player Player
 	matches []Match
 	heroes map[int]Hero
+	err error
 	//width int 
 	//height int
 
 }
 
-func initialModel() {
+func loadHeroes() map[int]Hero {
+	var heroes []Hero
+	json.Unmarshal(heroesByte, &heroes)
+	res := make(map[int]Hero)
+	for _, hero := range heroes {
+		res[hero.ID] = hero
+	}
+	return res
+}
+
+func initialModel() model {
 	return model {
-		screen: "input"
+		screen: "input",
+		heroes: loadHeroes(),
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	return nil 
+	return nil
 }
 
 type playerMsg Player
@@ -107,6 +119,7 @@ func fetchPlayer(id string) tea.Cmd {
 		}
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
+		
 		var player Player
 		json.Unmarshal(body, &player)
 		return playerMsg(player)
@@ -139,7 +152,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd){
 			return m, tea.Quit
 		
 		case "enter":
-			return m, tea.Batch(fetchPlayer(m.input), tea.Batch(fetchMatches(m.input))
+			m.screen = "loading"
+			return m, tea.Batch(fetchPlayer(m.input), fetchMatches(m.input))
 
 		case "backspace":
 			if len(m.input) > 0 {
@@ -161,60 +175,39 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd){
 	}
 	return m, nil
 }
-
-func main() {
-	var heroesList []Hero
-	json.Unmarshal(heroesByte, &heroesList)
-
-	heroMap := make(map[int]string)
-	for _, h := range heroesList {
-		heroMap[h.ID] = h.LocalizedName
+func (m model) View() tea.View {
+	if m.screen == "input" {
+		return tea.NewView("Enter player ID:\n> " + m.input)
 	}
-
-	var id string
-	fmt.Scan(&id)
-	url := fmt.Sprintf("https://api.opendota.com/api/players/%s", id)
-	resp, err := http.Get(url)
-	matches_url := fmt.Sprintf("https://api.opendota.com/api/players/%s/recentMatches", id)
-	resp2, err2 := http.Get(matches_url)
-	if err != nil {
-		panic(err)
-	}
-	defer resp.Body.Close()
-	if err2 != nil {
-		panic(err2)
-	}
-	defer resp2.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	body2, _ := io.ReadAll(resp2.Body)
-	var player Player
-	var matches []Match
-
-	json.Unmarshal(body, &player)
-	json.Unmarshal(body2, &matches)
-	if len(matches) == 0 {
-		fmt.Println("This profile is private or no recent matches")
-	}
-
-	fmt.Println(nameStyle.Render("\nPlayer : " + player.Profile.Personaname))
-	fmt.Println(strings.Repeat("--", 25))
-
-	for _, match := range matches {
-		win := (match.RadiantWin && match.PlayerSlot < 128) || (!match.RadiantWin && match.PlayerSlot >= 128)
-		hName, _ := heroMap[match.HeroID]
-		kda := fmt.Sprintf("%d/%d/%d", match.Kills, match.Deaths, match.Assists)
-
-		result := lossStyle.Render("LOSS")
-		if win {
-			result = winStyle.Render("WIN")
+	if m.screen == "loading" {
+		return tea.NewView("Loading...")
+	} else {
+		s := nameStyle.Render(m.player.Profile.Personaname) + "\n"
+		for _, match := range m.matches {
+			win := (match.RadiantWin && match.PlayerSlot < 128) || (!match.RadiantWin && match.PlayerSlot >= 128) 
+			heroName := m.heroes[match.HeroID].LocalizedName
+			kda := fmt.Sprintf("%d/%d/%d", match.Kills, match.Deaths, match.Assists)
+			result := lossStyle.Render("LOSS")
+			if win {
+				result = winStyle.Render("WIN")
+			}
+			line := fmt.Sprintf("%s | %s | %s | %d:%02d",
+				result,
+				heroStyle.Render(heroName),
+				kdaStyle.Render(kda),
+				match.Duration/60, match.Duration%60,
+			)
+			s += line + "\n"
 		}
-		fmt.Printf("%s | %s | %s | %d:%02d\n",
-		result,
-		heroStyle.Render(hName),
-		kdaStyle.Render(kda),
-		match.Duration/60, match.Duration%60,
-	)
+		return tea.NewView(s)
+	}
 }
 
+func main() {
+	p := tea.NewProgram(initialModel())
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
 	return
 }

@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"github.com/charmbracelet/lipgloss"
 	_ "embed"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 type Profile struct {
@@ -44,6 +46,10 @@ type Match struct {
 	
 }
 
+// screen 
+
+
+
 var (
 	winStyle = lipgloss.NewStyle().
 	Bold(true).
@@ -65,6 +71,96 @@ var (
 	Width(10).
 	Align(lipgloss.Center)
 )
+
+type model struct {
+	input string
+	screen string
+	cursor int
+	player Player
+	matches []Match
+	heroes map[int]Hero
+	//width int 
+	//height int
+
+}
+
+func initialModel() {
+	return model {
+		screen: "input"
+	}
+}
+
+func (m model) Init() tea.Cmd {
+	return nil 
+}
+
+type playerMsg Player
+type matchesMsg []Match
+
+func fetchPlayer(id string) tea.Cmd {
+	return func() tea.Msg {
+// возможно объявитьчтение строки?
+		url := fmt.Sprintf("https://api.opendota.com/api/players/%s", id)
+		resp, err := http.Get(url)
+		if err != nil {
+			panic(err)
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		var player Player
+		json.Unmarshal(body, &player)
+		return playerMsg(player)
+	}
+}
+
+func fetchMatches(id string) tea.Cmd {
+	return func() tea.Msg {
+		url := fmt.Sprintf("https://api.opendota.com/api/players/%s/recentMatches", id)
+		resp, err := http.Get(url)
+		if err != nil {
+			panic(err)
+			//добавить обработку ошибок?
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		var matches []Match
+		json.Unmarshal(body, &matches)
+		return matchesMsg(matches)
+	}
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd){
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+
+		switch msg.String(){
+
+		case "ctrl+c", "q":
+			return m, tea.Quit
+		
+		case "enter":
+			return m, tea.Batch(fetchPlayer(m.input), tea.Batch(fetchMatches(m.input))
+
+		case "backspace":
+			if len(m.input) > 0 {
+				m.input = m.input[:len(m.input)-1]
+			}
+
+		default:
+			m.input = m.input + msg.String()
+		}
+
+	case playerMsg:
+		m.player = Player(msg)
+		return m, nil
+	
+	case matchesMsg:
+		m.matches = []Match(msg)
+		m.screen = "matches"
+		return m, nil
+	}
+	return m, nil
+}
 
 func main() {
 	var heroesList []Hero

@@ -176,6 +176,31 @@ func leaverStr(l int) string {
 	}
 	return "Abandoned"
 }
+
+func renderMatch(match Match, heroName string)  string {
+	win := (match.RadiantWin && match.PlayerSlot < 128) || (!match.RadiantWin && match.PlayerSlot >= 128)
+	result := lossStyle.Render("LOSS")
+	if win {
+		result := winStyle.Render("WIN")
+	}
+	heroCol := lipgloss.NewStyle().
+		Width(20).
+		Allign(lipgloss.Left).
+		Render(heroName)
+	
+		kda :=
+
+		dur := 
+
+		return lipgloss.JoinHorizontal(
+			// доделать и почитать про header
+		)
+}
+
+//func lobbyStr(GameMode int, LobbyType int) string {
+//	case 
+
+//}
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd){
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
